@@ -1,0 +1,58 @@
+name: CI
+on:
+  push:
+    tags:        
+      - v1.*
+
+  workflow_dispatch:
+
+jobs:
+  automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: setup cluster
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          port: ${{ secrets.PORT }}
+          script: |
+            git clone https://github.com/husnialhamdani/kyvernop.git dir
+            bash ~/dir/setup.sh
+        continue-on-error: true
+
+      - name: run automation
+        timeout-minutes: 40
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          port: ${{ secrets.PORT }}
+          script: |
+            export EMAILFROM=${{ secrets.EMAILFROM }}
+            export EMAILPASS=${{ secrets.EMAILPASS }}
+            export EMAILTO=${{ secrets.EMAILTO }}
+            printenv | grep EMAIL
+            cd ~/dir
+            pip install -r requirements.txt
+            /usr/local/go/bin/go mod download
+            /usr/local/go/bin/go run main.go execute --scale small
+            git config user.name github-actions
+            git config user.email github-actions@github.com
+            git add ~/dir/report.png
+            git commit -m "push report.png"
+            git push   
+            rm -rf ~/dir
+
+      - name: storing report
+        uses: actions/upload-artifact@v3
+        with:
+          name: report
+          path: report.png
